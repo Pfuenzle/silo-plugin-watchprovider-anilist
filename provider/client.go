@@ -18,76 +18,73 @@ import (
 )
 
 const (
-	maxResponseBytes = 8 << 20
-	// A cold Floppy metadata lookup can legitimately take more than a minute.
-	// Stay below the host's two-minute watch-sync RPC deadline so transport
-	// failures are still reported as provider faults with room for cleanup.
-	defaultRequestTimeout = 110 * time.Second
+	maxResponseBytes      = 8 << 20
+	defaultRequestTimeout = 30 * time.Second
 )
 
 type apiClient struct {
-	baseURL *url.URL
-	token   string
-	http    *http.Client
+	endpoint *url.URL
+	token    string
+	http     *http.Client
 }
 
-func newAPIClient(rawBaseURL, token string, httpClient *http.Client) (*apiClient, error) {
-	baseURL, err := url.Parse(strings.TrimSpace(rawBaseURL))
-	if err != nil || baseURL.Host == "" || (baseURL.Scheme != "http" && baseURL.Scheme != "https") {
-		return nil, errors.New("Floppy base URL must be an absolute http or https URL")
+func newAPIClient(rawEndpoint, token string, httpClient *http.Client) (*apiClient, error) {
+	if strings.TrimSpace(rawEndpoint) == "" {
+		rawEndpoint = defaultGraphQLEndpoint
 	}
-	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.Fragment != "" {
-		return nil, errors.New("Floppy base URL must not include credentials, a query, or a fragment")
+	endpoint, err := url.Parse(strings.TrimSpace(rawEndpoint))
+	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return nil, errors.New("AniList GraphQL endpoint must be an absolute http or https URL")
 	}
-	baseURL.Path = strings.TrimRight(baseURL.Path, "/")
+	if endpoint.Scheme == "http" && !localHTTPHost(endpoint.Hostname()) {
+		return nil, errors.New("AniList GraphQL endpoint must use https unless it targets localhost")
+	}
+	if endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return nil, errors.New("AniList GraphQL endpoint must not include credentials, a query, or a fragment")
+	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultRequestTimeout}
 	}
-	return &apiClient{baseURL: baseURL, token: strings.TrimSpace(token), http: httpClient}, nil
+	return &apiClient{endpoint: endpoint, token: strings.TrimSpace(token), http: httpClient}, nil
 }
 
-func (c *apiClient) endpoint(path string, query url.Values) string {
-	endpoint := *c.baseURL
-	endpoint.Path = strings.TrimRight(c.baseURL.Path, "/") + "/" + strings.TrimLeft(path, "/")
-	endpoint.RawQuery = query.Encode()
-	return endpoint.String()
-}
-
-func (c *apiClient) do(ctx context.Context, method, path string, query url.Values, payload, output any, tokenScheme string) *pluginv1.WatchSyncFault {
-	var body io.Reader
-	if payload != nil {
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return permanentFault("Floppy request could not be encoded")
-		}
-		body = bytes.NewReader(encoded)
+func localHTTPHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.endpoint(path, query), body)
+}
+
+func (c *apiClient) graphQL(ctx context.Context, query string, variables map[string]any, output *graphQLResponse) *pluginv1.WatchSyncFault {
+	encoded, err := json.Marshal(graphQLRequest{Query: query, Variables: variables})
 	if err != nil {
-		return permanentFault("Floppy request could not be created")
+		return permanentFault("AniList request could not be encoded")
 	}
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint.String(), bytes.NewReader(encoded))
+	if err != nil {
+		return permanentFault("AniList request could not be created")
 	}
-	if c.token != "" {
-		req.Header.Set("Authorization", tokenScheme+" "+c.token)
-	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return temporaryFault("Floppy is temporarily unreachable", 0)
+		return temporaryFault("AniList is temporarily unreachable", 0)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return faultForHTTPResponse(resp)
 	}
-	if output == nil || resp.StatusCode == http.StatusNoContent {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBytes))
-		return nil
-	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes))
 	if err := decoder.Decode(output); err != nil {
-		return temporaryFault("Floppy returned an unreadable response", 0)
+		return temporaryFault("AniList returned an unreadable response", 0)
+	}
+	if len(output.Errors) > 0 {
+		return faultForGraphQLErrors(output.Errors)
 	}
 	return nil
 }
@@ -95,29 +92,34 @@ func (c *apiClient) do(ctx context.Context, method, path string, query url.Value
 func faultForHTTPResponse(resp *http.Response) *pluginv1.WatchSyncFault {
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &pluginv1.WatchSyncFault{
-			Code:        pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_CREDENTIAL,
-			SafeMessage: "Floppy rejected the API token",
-		}
+		return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_CREDENTIAL, SafeMessage: "AniList rejected the access token"}
 	case http.StatusTooManyRequests:
-		return &pluginv1.WatchSyncFault{
-			Code:        pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_RATE_LIMITED,
-			SafeMessage: "Floppy rate limit reached",
-			RetryAfter:  durationpb.New(retryAfter(resp.Header.Get("Retry-After"))),
-		}
+		return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_RATE_LIMITED, SafeMessage: "AniList rate limit reached", RetryAfter: durationpb.New(retryAfter(resp.Header.Get("Retry-After")))}
 	case http.StatusRequestTimeout:
-		return temporaryFault("Floppy request timed out", 0)
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
-		return &pluginv1.WatchSyncFault{
-			Code:        pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST,
-			SafeMessage: fmt.Sprintf("Floppy rejected the request (HTTP %d)", resp.StatusCode),
-		}
+		return temporaryFault("AniList request timed out", 0)
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+		return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: fmt.Sprintf("AniList rejected the request (HTTP %d)", resp.StatusCode)}
 	default:
 		if resp.StatusCode >= http.StatusInternalServerError {
-			return temporaryFault("Floppy is temporarily unavailable", 0)
+			return temporaryFault("AniList is temporarily unavailable", 0)
 		}
-		return permanentFault(fmt.Sprintf("Floppy request failed (HTTP %d)", resp.StatusCode))
+		return permanentFault(fmt.Sprintf("AniList request failed (HTTP %d)", resp.StatusCode))
 	}
+}
+
+func faultForGraphQLErrors(values []graphQLError) *pluginv1.WatchSyncFault {
+	for _, value := range values {
+		if value.Status == http.StatusTooManyRequests {
+			return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_RATE_LIMITED, SafeMessage: "AniList rate limit reached"}
+		}
+		if value.Status == http.StatusUnauthorized || value.Status == http.StatusForbidden {
+			return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_CREDENTIAL, SafeMessage: "AniList rejected the access token"}
+		}
+		if value.Status >= http.StatusInternalServerError {
+			return temporaryFault("AniList is temporarily unavailable", 0)
+		}
+	}
+	return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: "AniList rejected the GraphQL request"}
 }
 
 func retryAfter(value string) time.Duration {
@@ -131,10 +133,7 @@ func retryAfter(value string) time.Duration {
 }
 
 func temporaryFault(message string, retryAfter time.Duration) *pluginv1.WatchSyncFault {
-	fault := &pluginv1.WatchSyncFault{
-		Code:        pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_TEMPORARY,
-		SafeMessage: message,
-	}
+	fault := &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_TEMPORARY, SafeMessage: message}
 	if retryAfter > 0 {
 		fault.RetryAfter = durationpb.New(retryAfter)
 	}
@@ -142,8 +141,5 @@ func temporaryFault(message string, retryAfter time.Duration) *pluginv1.WatchSyn
 }
 
 func permanentFault(message string) *pluginv1.WatchSyncFault {
-	return &pluginv1.WatchSyncFault{
-		Code:        pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_PERMANENT,
-		SafeMessage: message,
-	}
+	return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_PERMANENT, SafeMessage: message}
 }

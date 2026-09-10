@@ -1,82 +1,59 @@
 package provider
 
-import "encoding/json"
-
-type validateTokenResponse struct {
-	Valid    bool   `json:"valid"`
-	Username string `json:"user_name"`
+type graphQLRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables,omitempty"`
 }
 
-type pagination struct {
-	Total  int    `json:"total"`
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
-	Next   string `json:"next"`
+type graphQLResponse struct {
+	Data   graphQLData    `json:"data"`
+	Errors []graphQLError `json:"errors"`
 }
 
-type historyResponse struct {
-	Pagination pagination   `json:"pagination"`
-	Results    []historyDay `json:"results"`
+type graphQLData struct {
+	Viewer             *aniListViewer    `json:"Viewer"`
+	Page               aniListPage       `json:"Page"`
+	SaveMediaListEntry *aniListListEntry `json:"SaveMediaListEntry"`
 }
 
-type historyDay struct {
-	Date    string         `json:"date"`
-	Entries []historyEntry `json:"entries"`
+type graphQLError struct {
+	Message string `json:"message"`
+	Status  int    `json:"status"`
 }
 
-type historyEntry struct {
-	MediaType    string          `json:"media_type"`
-	Item         historyItem     `json:"item"`
-	Title        string          `json:"title"`
-	DisplayTitle string          `json:"display_title"`
-	Status       string          `json:"status"`
-	PlayedAt     string          `json:"played_at_local"`
-	PlayCount    int             `json:"play_count"`
-	InstanceID   json.RawMessage `json:"instance_id"`
-	EpisodeLabel string          `json:"episode_label"`
-	EpisodeCode  string          `json:"episode_code"`
+type aniListViewer struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
-type historyItem struct {
-	MediaType          string          `json:"media_type"`
-	MediaID            json.RawMessage `json:"media_id"`
-	Source             string          `json:"source"`
-	Title              string          `json:"title"`
-	SeasonNumber       *int32          `json:"season_number"`
-	EpisodeNumber      *int32          `json:"episode_number"`
-	ProviderExternalID map[string]any  `json:"provider_external_ids"`
+type aniListPage struct {
+	Media []aniListMedia `json:"media"`
 }
 
-type progressResponse struct {
-	Pagination pagination      `json:"pagination"`
-	Results    []progressEntry `json:"results"`
+type aniListMedia struct {
+	ID             int               `json:"id"`
+	Episodes       int32             `json:"episodes"`
+	Format         string            `json:"format"`
+	MediaListEntry *aniListListEntry `json:"mediaListEntry"`
 }
 
-type progressEntry struct {
-	MediaType     string          `json:"media_type"`
-	Source        string          `json:"source"`
-	MediaID       json.RawMessage `json:"media_id"`
-	SeasonNumber  *int32          `json:"season_number"`
-	EpisodeNumber *int32          `json:"episode_number"`
-	IDs           map[string]any  `json:"ids"`
-	Title         string          `json:"title"`
-	SeriesTitle   string          `json:"series_title"`
-	Position      float64         `json:"position_seconds"`
-	Duration      float64         `json:"duration_seconds"`
-	Completed     bool            `json:"completed"`
-	UpdatedAt     string          `json:"updated_at"`
+type aniListListEntry struct {
+	ID       int    `json:"id"`
+	Status   string `json:"status"`
+	Progress int32  `json:"progress"`
 }
 
-type scrobblePayload struct {
-	Action          string            `json:"action"`
-	MediaType       string            `json:"media_type"`
-	IDs             map[string]string `json:"ids"`
-	Title           string            `json:"title,omitempty"`
-	SeriesTitle     string            `json:"series_title,omitempty"`
-	SeasonNumber    *int32            `json:"season_number,omitempty"`
-	EpisodeNumber   *int32            `json:"episode_number,omitempty"`
-	PositionSeconds *int64            `json:"position_seconds,omitempty"`
-	DurationSeconds *int64            `json:"duration_seconds,omitempty"`
-	Completed       *bool             `json:"completed,omitempty"`
-	PlayedAt        string            `json:"played_at,omitempty"`
+type fuzzyDate struct {
+	Year  int `json:"year"`
+	Month int `json:"month"`
+	Day   int `json:"day"`
+}
+
+type scrobbleTarget struct {
+	Search      string
+	Year        int32
+	Formats     []string
+	Progress    int32
+	CompletedAt *fuzzyDate
+	Final       bool
 }

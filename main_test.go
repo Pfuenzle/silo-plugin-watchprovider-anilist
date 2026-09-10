@@ -40,6 +40,21 @@ func TestManifestDeclaresAniListAuthorizationCodeProvider(t *testing.T) {
 	assertOAuthGlobalConfigSchema(t, globalSchemas[0])
 }
 
+func TestManifestVersionMatchesRuntimeDefault(t *testing.T) {
+	t.Parallel()
+	parsed, err := manifest.Load(manifestJSON)
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	runtimeManifest, err := manifest.LoadWithChecksum(manifestJSON, version)
+	if err != nil {
+		t.Fatalf("load runtime manifest: %v", err)
+	}
+	if parsed.GetVersion() != manifestVersion || runtimeManifest.GetVersion() != manifestVersion {
+		t.Fatalf("manifest version = %q runtime version = %q, want %q", parsed.GetVersion(), runtimeManifest.GetVersion(), manifestVersion)
+	}
+}
+
 func assertOAuthGlobalConfigSchema(t *testing.T, schema *pluginv1.ConfigSchema) {
 	t.Helper()
 	if schema.GetKey() != "anilist" || !schema.GetRequired() {

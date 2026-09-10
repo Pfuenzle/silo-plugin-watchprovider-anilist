@@ -1,4 +1,4 @@
-module github.com/Silo-Server/silo-plugin-watchprovider-floppy
+module github.com/Silo-Server/silo-plugin-watchprovider-anilist
 
 go 1.26.5
 

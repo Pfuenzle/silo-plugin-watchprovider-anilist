@@ -4,7 +4,7 @@ import (
 	_ "embed"
 
 	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtime"
-	"github.com/Silo-Server/silo-plugin-watchprovider-floppy/provider"
+	"github.com/Silo-Server/silo-plugin-watchprovider-anilist/provider"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

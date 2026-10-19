@@ -63,7 +63,7 @@
     "display_name": "AniList Watch Provider",
     "summary": "Scrobble completed Silo watch activity to AniList.",
     "description_markdown": "Exports completed anime movie watches to AniList as completed list entries and completed episode watches as series progress. AniList does not expose Silo-compatible history import, resume progress import, or live playback scrobbling, so this provider only advertises completed-watch export.",
-      "setup_markdown": "Create an AniList OAuth application with the redirect URL https://YOUR-SILO-HOST/api/v1/watch-providers/anilist/auth/callback. Configure anilist.client_id plus the secret anilist.client_secret in the plugin's global settings. Silo connects each profile with AniList's authorization-code flow and stores returned access tokens as encrypted profile credentials.",
+    "setup_markdown": "Create an AniList OAuth application with the redirect URL https://YOUR-SILO-HOST/api/v2/watch-providers/PROVIDER-KEY/auth/callback. Replace PROVIDER-KEY with this installation's provider key shown by Silo, such as plugin:4:anilist; include any deployment URL prefix. Configure anilist.client_id plus the secret anilist.client_secret in the plugin's global settings. Silo connects each profile with AniList's authorization-code flow and stores returned access tokens as encrypted profile credentials.",
     "homepage_url": "https://anilist.co/",
     "source_url": "https://github.com/Silo-Server/silo-plugin-watchprovider-anilist",
     "support_url": "https://github.com/Silo-Server/silo-plugin-watchprovider-anilist/issues",

@@ -117,7 +117,7 @@ func TestApplyWatchedEpisodeUpdatesSeriesProgress(t *testing.T) {
 		Events: []*pluginv1.WatchSyncEvent{{
 			EventId: "episode-5", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_SCROBBLE_STOP, CompletionPercent: 100,
 			Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
-				SeriesTitle: "Cowboy Bebop", SeriesYear: 1998, EpisodeNumber: 5},
+				SeriesTitle: "Cowboy Bebop", SeriesYear: 1998, SeasonNumber: 1, EpisodeNumber: 5},
 		}},
 	})
 	if err != nil {
@@ -125,6 +125,68 @@ func TestApplyWatchedEpisodeUpdatesSeriesProgress(t *testing.T) {
 	}
 	if response.GetFault() != nil || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED {
 		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestSeasonTwoUsesAbsoluteProgressAndSeriesCount(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		absolute int32
+		status   string
+	}{
+		{"season boundary", 13, "CURRENT"},
+		{"series completion", 24, "COMPLETED"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mutations := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				payload := decodeGraphQL(t, r)
+				if strings.Contains(payload.Query, "SaveMediaListEntry") {
+					mutations++
+					if payload.Variables["progress"] != float64(tc.absolute) || payload.Variables["status"] != tc.status {
+						t.Errorf("variables = %#v", payload.Variables)
+					}
+					writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 9, "status": tc.status, "progress": tc.absolute}}})
+					return
+				}
+				// With an unknown remote episode total, the host's catalog count
+				// still identifies the final regular episode.
+				writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{map[string]any{
+					"id": 1, "episodes": nil, "format": "TV", "mediaListEntry": nil,
+				}}}}})
+			}))
+			defer upstream.Close()
+			response, err := NewServer(upstream.Client()).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
+				Context: authenticatedContext(upstream.URL),
+				Events: []*pluginv1.WatchSyncEvent{{
+					EventId: "season-two", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+					Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
+						SeriesTitle: "Anime", SeasonNumber: 2, EpisodeNumber: 1,
+						AbsoluteEpisodeNumber: tc.absolute, SeriesEpisodeCount: 24},
+				}},
+			})
+			if err != nil || response.GetFault() != nil || len(response.GetResults()) != 1 || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED || mutations != 1 {
+				t.Fatalf("response = %v, error = %v, mutations = %d", response, err, mutations)
+			}
+		})
+	}
+}
+
+func TestUnknownAbsoluteProgressRejectsLaterSeasonsAndSpecials(t *testing.T) {
+	t.Parallel()
+	for _, season := range []int32{0, 2, 3} {
+		response, err := NewServer(nil).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
+			Context: authenticatedContext(defaultGraphQLEndpoint),
+			Events: []*pluginv1.WatchSyncEvent{{
+				EventId: "unknown-order", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+				Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
+					SeriesTitle: "Anime", SeasonNumber: season, EpisodeNumber: 1},
+			}},
+		})
+		if err != nil || response.GetFault() != nil || len(response.GetResults()) != 1 || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_REJECTED {
+			t.Fatalf("season %d: response = %v, error = %v", season, response, err)
+		}
 	}
 }
 
@@ -147,7 +209,7 @@ func TestApplyWatchedEpisodeIsNoChangeWhenProgressAlreadyCoversEpisode(t *testin
 		Events: []*pluginv1.WatchSyncEvent{{
 			EventId: "episode-5", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
 			Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
-				SeriesTitle: "Cowboy Bebop", EpisodeNumber: 5},
+				SeriesTitle: "Cowboy Bebop", SeasonNumber: 1, EpisodeNumber: 5},
 		}},
 	})
 	if err != nil {

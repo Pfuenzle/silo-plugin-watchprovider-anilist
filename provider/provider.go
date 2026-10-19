@@ -188,6 +188,9 @@ func targetFromEvent(event *pluginv1.WatchSyncEvent) (scrobbleTarget, *pluginv1.
 		target.Formats = []string{"TV", "TV_SHORT", "ONA", "OVA", "SPECIAL"}
 		target.Progress = media.GetAbsoluteEpisodeNumber()
 		if target.Progress <= 0 {
+			if media.GetSeasonNumber() != 1 {
+				return scrobbleTarget{}, invalidRequestFault("Episode events outside season one require an absolute episode number")
+			}
 			target.Progress = media.GetEpisodeNumber()
 		}
 		if target.Progress <= 0 {

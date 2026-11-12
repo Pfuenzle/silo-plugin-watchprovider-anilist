@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
@@ -20,13 +21,40 @@ import (
 const (
 	maxResponseBytes      = 8 << 20
 	defaultRequestTimeout = 30 * time.Second
+	aniListRequestSpacing = 700 * time.Millisecond
 )
 
-// apiClient serves one RPC; it is not shared across calls.
+type requestGate struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+func (g *requestGate) wait(ctx context.Context) error {
+	g.mu.Lock()
+	wait := time.Until(g.next)
+	if wait < 0 {
+		wait = 0
+	}
+	g.next = time.Now().Add(wait + aniListRequestSpacing)
+	g.mu.Unlock()
+	if wait == 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 type apiClient struct {
 	endpoint *url.URL
 	token    string
 	http     *http.Client
+	gate     *requestGate
 }
 
 func newAPIClient(rawEndpoint, token string, httpClient *http.Client) (*apiClient, error) {
@@ -46,7 +74,7 @@ func newAPIClient(rawEndpoint, token string, httpClient *http.Client) (*apiClien
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultRequestTimeout}
 	}
-	return &apiClient{endpoint: endpoint, token: strings.TrimSpace(token), http: httpClient}, nil
+	return &apiClient{endpoint: endpoint, token: strings.TrimSpace(token), http: httpClient, gate: &requestGate{}}, nil
 }
 
 func localHTTPHost(host string) bool {
@@ -59,6 +87,9 @@ func localHTTPHost(host string) bool {
 }
 
 func (c *apiClient) graphQL(ctx context.Context, query string, variables map[string]any, output *graphQLResponse) *pluginv1.WatchSyncFault {
+	if err := c.gate.wait(ctx); err != nil {
+		return temporaryFault("AniList request was cancelled", 0)
+	}
 	encoded, err := json.Marshal(graphQLRequest{Query: query, Variables: variables})
 	if err != nil {
 		return permanentFault("AniList request could not be encoded")

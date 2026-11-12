@@ -1,6 +1,6 @@
 {
   "plugin_id": "silo.watchprovider.anilist",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "checksum": "__CHECKSUM__",
   "silo_api_version": "v1",
   "supported_platforms": [
@@ -26,7 +26,7 @@
           "WATCH_SYNC_MEDIA_TYPE_SERIES"
         ],
         "external_id_namespaces": [],
-        "max_batch_size": 50,
+        "max_batch_size": 1,
         "scrobble_playback": true
       }
     }

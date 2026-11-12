@@ -50,6 +50,18 @@ func (g *requestGate) wait(ctx context.Context) error {
 	}
 }
 
+func (g *requestGate) backoff(delay time.Duration) {
+	if delay <= 0 {
+		return
+	}
+	g.mu.Lock()
+	until := time.Now().Add(delay)
+	if until.After(g.next) {
+		g.next = until
+	}
+	g.mu.Unlock()
+}
+
 type apiClient struct {
 	endpoint *url.URL
 	token    string
@@ -109,6 +121,9 @@ func (c *apiClient) graphQL(ctx context.Context, query string, variables map[str
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		if resp.StatusCode == http.StatusTooManyRequests {
+			c.gate.backoff(retryAfter(resp.Header.Get("Retry-After")))
+		}
 		return faultForHTTPResponse(resp)
 	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes))

@@ -1,4 +1,4 @@
-module github.com/Silo-Server/silo-plugin-watchprovider-floppy
+module github.com/Silo-Server/silo-plugin-watchprovider-anilist
 
 go 1.26.5
 
@@ -6,7 +6,6 @@ require (
 	github.com/Silo-Server/silo-plugin-sdk v0.17.0
 	google.golang.org/protobuf v1.36.11
 )
-
 require (
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

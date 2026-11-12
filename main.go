@@ -4,11 +4,13 @@ import (
 	_ "embed"
 
 	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtime"
-	"github.com/Silo-Server/silo-plugin-watchprovider-floppy/provider"
+	"github.com/Silo-Server/silo-plugin-watchprovider-anilist/provider"
 )
 
+const manifestVersion = "0.1.1"
+
 // version is set at build time with -ldflags "-X main.version=...".
-var version string
+var version = manifestVersion
 
 //go:embed manifest.json
 var manifestJSON []byte

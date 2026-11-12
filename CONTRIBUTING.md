@@ -1,4 +1,4 @@
-# Contributing to the Floppy Watch Provider Plugin
+# Contributing to the AniList Watch Provider Plugin
 
 The [Silo contribution guide](https://github.com/Silo-Server/.github/blob/main/CONTRIBUTING.md)
 covers project-wide coordination, focused changes, evidence, AI disclosure, and
@@ -7,9 +7,9 @@ plugin-specific workflow.
 
 ## Before you start
 
-Open an [issue](https://github.com/Silo-Server/silo-plugin-watchprovider-floppy/issues)
+Open an [issue](https://github.com/Silo-Server/silo-plugin-watchprovider-anilist/issues)
 before changing authentication, reconciliation, idempotency, supported state,
-configuration, or the advertised capability. This repository owns the Floppy
+configuration, or the advertised capability. This repository owns the AniList
 adapter; plugin contracts belong in
 [`silo-plugin-sdk`](https://github.com/Silo-Server/silo-plugin-sdk), while host
 watch-sync orchestration belongs in

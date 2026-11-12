@@ -33,10 +33,23 @@ func findMedia(ctx context.Context, client *apiClient, target scrobbleTarget) (a
 	if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
 		return aniListMedia{}, fault
 	}
-	if len(response.Data.Page.Media) == 0 {
+	media := response.Data.Page.Media
+	if len(media) == 0 {
 		return aniListMedia{}, nil
 	}
-	return response.Data.Page.Media[0], nil
+	if target.SeasonNumber > 0 {
+		season := int32(0)
+		for _, candidate := range media {
+			if candidate.Format != "TV" {
+				continue
+			}
+			season++
+			if season == target.SeasonNumber {
+				return candidate, nil
+			}
+		}
+	}
+	return media[0], nil
 }
 
 func saveMediaListEntry(ctx context.Context, client *apiClient, mediaID int, status string, target scrobbleTarget) *pluginv1.WatchSyncFault {

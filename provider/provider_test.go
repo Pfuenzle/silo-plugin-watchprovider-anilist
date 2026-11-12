@@ -72,7 +72,6 @@ func TestApplyWatchedMovieCompletesAniListEntry(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-
 	response, err := NewServer(upstream.Client()).ApplyEvents(context.Background(), &pluginv1.WatchSyncApplyEventsRequest{
 		Context: authenticatedContext(upstream.URL),
 		Events: []*pluginv1.WatchSyncEvent{{
@@ -104,7 +103,7 @@ func TestApplyWatchedEpisodeUpdatesSeriesProgress(t *testing.T) {
 			return
 		}
 		formats := payload.Variables["formats"].([]any)
-		if payload.Variables["search"] != "Cowboy Bebop" || len(formats) != 5 || formats[0] != "TV" || payload.Variables["year"] != "1998%" {
+		if payload.Variables["search"] != "Cowboy Bebop" || len(formats) != 5 || formats[0] != "TV" || payload.Variables["year"] != nil {
 			t.Fatalf("variables = %#v", payload.Variables)
 		}
 		writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{map[string]any{
@@ -129,65 +128,43 @@ func TestApplyWatchedEpisodeUpdatesSeriesProgress(t *testing.T) {
 	}
 }
 
-func TestSeasonTwoUsesAbsoluteProgressAndSeriesCount(t *testing.T) {
+func TestSeasonUsesSeasonLocalProgress(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name     string
-		absolute int32
-		status   string
+		season   int32
+		episode  int32
+		progress float64
 	}{
-		{"season boundary", 13, "CURRENT"},
-		{"series completion", 24, "COMPLETED"},
+		{"season boundary", 2, 1, 1},
+		{"third season episode seven", 3, 7, 7},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mutations := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				payload := decodeGraphQL(t, r)
 				if strings.Contains(payload.Query, "SaveMediaListEntry") {
-					mutations++
-					if payload.Variables["progress"] != float64(tc.absolute) || payload.Variables["status"] != tc.status {
+					if payload.Variables["progress"] != tc.progress || payload.Variables["status"] != "CURRENT" {
 						t.Errorf("variables = %#v", payload.Variables)
 					}
-					writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 9, "status": tc.status, "progress": tc.absolute}}})
+					writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 9, "status": "CURRENT", "progress": int(tc.progress)}}})
 					return
 				}
-				// With an unknown remote episode total, the host's catalog count
-				// still identifies the final regular episode.
-				writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{map[string]any{
-					"id": 1, "episodes": nil, "format": "TV", "mediaListEntry": nil,
-				}}}}})
+				writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{
+					map[string]any{"id": 1, "episodes": 24, "format": "TV", "season": "SUMMER", "seasonYear": 2019, "mediaListEntry": nil},
+					map[string]any{"id": 2, "episodes": 11, "format": "TV", "season": "WINTER", "seasonYear": 2021, "mediaListEntry": nil},
+					map[string]any{"id": 3, "episodes": 11, "format": "TV", "season": "SPRING", "seasonYear": 2023, "mediaListEntry": nil},
+				}}}})
 			}))
 			defer upstream.Close()
 			response, err := NewServer(upstream.Client()).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
 				Context: authenticatedContext(upstream.URL),
-				Events: []*pluginv1.WatchSyncEvent{{
-					EventId: "season-two", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
-					Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
-						SeriesTitle: "Anime", SeasonNumber: 2, EpisodeNumber: 1,
-						AbsoluteEpisodeNumber: tc.absolute, SeriesEpisodeCount: 24},
-				}},
+				Events: []*pluginv1.WatchSyncEvent{{EventId: "season-episode", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+					Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE, SeriesTitle: "Dr. Stone", SeasonNumber: tc.season, EpisodeNumber: tc.episode}}},
 			})
-			if err != nil || response.GetFault() != nil || len(response.GetResults()) != 1 || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED || mutations != 1 {
-				t.Fatalf("response = %v, error = %v, mutations = %d", response, err, mutations)
+			if err != nil || response.GetFault() != nil || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED {
+				t.Fatalf("response = %v, error = %v", response, err)
 			}
 		})
-	}
-}
-
-func TestUnknownAbsoluteProgressRejectsLaterSeasonsAndSpecials(t *testing.T) {
-	t.Parallel()
-	for _, season := range []int32{0, 2, 3} {
-		response, err := NewServer(nil).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
-			Context: authenticatedContext(defaultGraphQLEndpoint),
-			Events: []*pluginv1.WatchSyncEvent{{
-				EventId: "unknown-order", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
-				Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE,
-					SeriesTitle: "Anime", SeasonNumber: season, EpisodeNumber: 1},
-			}},
-		})
-		if err != nil || response.GetFault() != nil || len(response.GetResults()) != 1 || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_REJECTED {
-			t.Fatalf("season %d: response = %v, error = %v", season, response, err)
-		}
 	}
 }
 

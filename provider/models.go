@@ -34,6 +34,8 @@ type aniListMedia struct {
 	ID             int               `json:"id"`
 	Episodes       int32             `json:"episodes"`
 	Format         string            `json:"format"`
+	Season         string            `json:"season"`
+	SeasonYear     int32             `json:"seasonYear"`
 	MediaListEntry *aniListListEntry `json:"mediaListEntry"`
 }
 
@@ -50,10 +52,11 @@ type fuzzyDate struct {
 }
 
 type scrobbleTarget struct {
-	Search      string
-	Year        int32
-	Formats     []string
-	Progress    int32
-	CompletedAt *fuzzyDate
-	Final       bool
+	Search       string
+	Year         int32
+	Formats      []string
+	Progress     int32
+	SeasonNumber int32
+	CompletedAt  *fuzzyDate
+	Final        bool
 }

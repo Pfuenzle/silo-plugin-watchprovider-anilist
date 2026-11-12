@@ -26,11 +26,13 @@ var (
 const viewerQuery = `query { Viewer { id name } }`
 
 const mediaSearchQuery = `query ($search: String!, $formats: [MediaFormat], $year: String) {
-  Page(page: 1, perPage: 1) {
-    media(type: ANIME, search: $search, format_in: $formats, startDate_like: $year, sort: [SEARCH_MATCH]) {
+  Page(page: 1, perPage: 20, sort: [START_DATE]) {
+    media(type: ANIME, search: $search, format_in: $formats, startDate_like: $year) {
       id
       episodes
       format
+      season
+      seasonYear
       mediaListEntry { id status progress }
     }
   }
@@ -185,21 +187,17 @@ func targetFromEvent(event *pluginv1.WatchSyncEvent) (scrobbleTarget, *pluginv1.
 		target.Year = media.GetYear()
 		target.Formats = []string{"MOVIE"}
 		target.Progress = 1
-		target.Final = true
 	case pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE:
 		target.Search = firstNonEmpty(media.GetSeriesTitle(), media.GetTitle(), media.GetOriginalTitle())
-		target.Year = media.GetSeriesYear()
 		target.Formats = []string{"TV", "TV_SHORT", "ONA", "OVA", "SPECIAL"}
-		target.Progress = media.GetAbsoluteEpisodeNumber()
-		if target.Progress <= 0 {
-			if media.GetSeasonNumber() != 1 {
-				return scrobbleTarget{}, invalidRequestFault("Episode events outside season one require an absolute episode number")
-			}
-			target.Progress = media.GetEpisodeNumber()
-		}
+		target.SeasonNumber = media.GetSeasonNumber()
+		target.Progress = media.GetEpisodeNumber()
 		if target.Progress <= 0 {
 			return scrobbleTarget{}, invalidRequestFault("Episode events require an episode number")
 		}
+		// AniList stores each season as its own media entry. Its progress is
+		// season-local, so never send Silo's series-wide absolute episode number.
+		target.Year = 0
 		if media.GetSeriesEpisodeCount() > 0 && target.Progress >= media.GetSeriesEpisodeCount() {
 			target.Final = true
 		}

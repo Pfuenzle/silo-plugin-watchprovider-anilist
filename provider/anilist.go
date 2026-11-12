@@ -101,6 +101,7 @@ func (s *Server) client(requestedCapability string, config *pluginv1.WatchSyncPr
 	if err != nil {
 		return nil, invalidRequestFault(err.Error())
 	}
+	client.gate = s.gate
 	return client, nil
 }
 

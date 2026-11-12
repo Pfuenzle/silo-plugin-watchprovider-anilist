@@ -50,10 +50,11 @@ type Server struct {
 	pluginv1.UnimplementedWatchSyncProviderServer
 	http          *http.Client
 	tokenEndpoint string
+	gate          *requestGate
 }
 
 func NewServer(httpClient *http.Client) *Server {
-	return &Server{http: httpClient}
+	return &Server{http: httpClient, gate: &requestGate{}}
 }
 
 func (s *Server) ExchangeAPIKey(ctx context.Context, req *pluginv1.WatchSyncExchangeAPIKeyRequest) (*pluginv1.WatchSyncCredentialResponse, error) {

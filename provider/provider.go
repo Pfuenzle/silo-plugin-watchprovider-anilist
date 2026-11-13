@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -157,7 +158,7 @@ func (s *Server) applyEvent(ctx context.Context, client *apiClient, event *plugi
 		return resultFromFault(event.GetEventId(), requestFault), nil
 	}
 	if media.ID == 0 {
-		return resultFromFault(event.GetEventId(), invalidRequestFault("AniList media could not be matched")), nil
+		return resultFromFault(event.GetEventId(), invalidRequestFault(fmt.Sprintf("AniList media could not be matched for %q season %d year %d", target.Search, target.SeasonNumber, target.Year))), nil
 	}
 	status := desiredStatus(target, media)
 	if alreadyApplied(media.MediaListEntry, status, target.Progress) {

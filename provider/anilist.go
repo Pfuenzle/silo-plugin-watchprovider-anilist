@@ -25,15 +25,18 @@ func validateAccount(ctx context.Context, client *apiClient) (*pluginv1.WatchSyn
 	return &pluginv1.WatchSyncAccount{ExternalSubject: fmt.Sprint(viewer.ID), Username: viewer.Name, DisplayName: viewer.Name}, nil
 }
 func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
+	season := target.SeasonNumber
 	if target.SeriesTVDBID != "" {
-		_, _ = lookupXEM(ctx, client.http, defaultXEMEndpoint, target.SeriesTVDBID, target.SeasonNumber, target.Progress)
+		if mapping, ok := lookupXEM(ctx, client.http, defaultXEMEndpoint, target.SeriesTVDBID, target.SeasonNumber, target.Progress); ok {
+			season = mapping.Season
+			target.Progress = mapping.Episode
+		}
 	}
 	var response graphQLResponse
 	variables := map[string]any{"search": target.Search, "formats": target.Formats, "year": yearLike(target.Year)}
 	if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
 		return aniListMedia{}, fault
 	}
-	season := target.SeasonNumber
 	var selected aniListMedia
 	if len(target.Formats) == 1 && target.Formats[0] == "MOVIE" {
 		selected = firstMedia(response.Data.Page.Media)

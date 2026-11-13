@@ -26,8 +26,8 @@ var (
 const viewerQuery = `query { Viewer { id name } }`
 
 const mediaSearchQuery = `query ($search: String!, $formats: [MediaFormat], $year: String) {
-  Page(page: 1, perPage: 20, sort: [START_DATE]) {
-    media(type: ANIME, search: $search, format_in: $formats, startDate_like: $year) {
+  Page(page: 1, perPage: 20) {
+    media(type: ANIME, search: $search, format_in: $formats, startDate_like: $year, sort: [START_DATE]) {
       id
       episodes
       format

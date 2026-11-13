@@ -7,7 +7,7 @@ import (
 	"github.com/Silo-Server/silo-plugin-watchprovider-anilist/provider"
 )
 
-const manifestVersion = "0.3.0"
+const manifestVersion = "0.3.1"
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = manifestVersion

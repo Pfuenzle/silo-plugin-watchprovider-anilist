@@ -27,10 +27,7 @@ func validateAccount(ctx context.Context, client *apiClient) (*pluginv1.WatchSyn
 func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
 	season := target.SeasonNumber
 	if target.SeriesTVDBID != "" {
-		if mapping, ok := lookupXEM(ctx, client.http, defaultXEMEndpoint, target.SeriesTVDBID, target.SeasonNumber, target.Progress); ok {
-			season = mapping.Season
-			target.Progress = mapping.Episode
-		}
+		_, _ = lookupXEM(ctx, client.http, defaultXEMEndpoint, target.SeriesTVDBID, target.SeasonNumber, target.Progress)
 	}
 	var response graphQLResponse
 	variables := map[string]any{"search": target.Search, "formats": target.Formats, "year": yearLike(target.Year)}

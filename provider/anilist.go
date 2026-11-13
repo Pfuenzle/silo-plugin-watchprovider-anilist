@@ -22,34 +22,53 @@ func validateAccount(ctx context.Context, client *apiClient) (*pluginv1.WatchSyn
 }
 
 func findMedia(ctx context.Context, client *apiClient, target scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
-	variables := map[string]any{"search": target.Search, "formats": nil, "year": nil}
-	if len(target.Formats) > 0 {
-		variables["formats"] = target.Formats
+	queries := []struct {
+		search  string
+		formats []string
+		year    string
+	}{
+		{target.Search, target.Formats, yearLike(target.Year)},
+		{normalizeAnimeTitle(target.Search), nil, ""},
 	}
-	if target.Year > 0 {
-		variables["year"] = fmt.Sprintf("%d%%", target.Year)
-	}
-	var response graphQLResponse
-	if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
-		return aniListMedia{}, fault
-	}
-	media := response.Data.Page.Media
-	if len(media) == 0 {
-		return aniListMedia{}, nil
-	}
-	if target.SeasonNumber > 0 {
-		season := int32(0)
-		for _, candidate := range media {
-			if candidate.Format != "TV" {
-				continue
-			}
-			season++
-			if season == target.SeasonNumber {
-				return candidate, nil
+	for _, query := range queries {
+		variables := map[string]any{"search": query.search, "formats": query.formats, "year": nil}
+		if query.year != "" {
+			variables["year"] = query.year
+		}
+		var response graphQLResponse
+		if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
+			return aniListMedia{}, fault
+		}
+		media := response.Data.Page.Media
+		if len(media) == 0 {
+			continue
+		}
+		if target.SeasonNumber > 0 {
+			season := int32(0)
+			for _, candidate := range media {
+				if candidate.Format != "TV" {
+					continue
+				}
+				season++
+				if season == target.SeasonNumber {
+					return candidate, nil
+				}
 			}
 		}
+		return media[0], nil
 	}
-	return media[0], nil
+	return aniListMedia{}, nil
+}
+
+func yearLike(year int32) string {
+	if year <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d%%", year)
+}
+
+func normalizeAnimeTitle(title string) string {
+	return strings.NewReplacer(".", " ", ":", " ", "-", " ").Replace(title)
 }
 
 func saveMediaListEntry(ctx context.Context, client *apiClient, mediaID int, status string, target scrobbleTarget) *pluginv1.WatchSyncFault {

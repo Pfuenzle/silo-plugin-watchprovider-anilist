@@ -143,8 +143,15 @@ func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, s
 	}
 	for i := start; i < len(media); i++ {
 		if media[i].ID == selected.ID {
-			return episodeNumber - episodeOffset(media, start, i)
+			progress := episodeNumber - episodeOffset(media, start, i)
+			if progress < 0 {
+				return 0
+			}
+			return progress
 		}
+	}
+	if episodeNumber < 0 {
+		return 0
 	}
 	return episodeNumber
 }

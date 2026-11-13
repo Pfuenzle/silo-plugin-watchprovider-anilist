@@ -54,6 +54,7 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 		selected = selectSeason(response.Data.Page.Media, season, target.Progress, target.SeriesYear)
 		if selected.ID != 0 {
 			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, 0)
+			return selected, nil
 		}
 	}
 	return aniListMedia{}, nil

@@ -136,6 +136,14 @@ func (c *apiClient) graphQL(ctx context.Context, query string, variables map[str
 	return nil
 }
 
+func faultForHTTPResponseBody(resp *http.Response) *pluginv1.WatchSyncFault {
+	var payload graphQLResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&payload); err == nil && len(payload.Errors) > 0 {
+		return faultForGraphQLErrors(payload.Errors)
+	}
+	return faultForHTTPResponse(resp)
+}
+
 func faultForHTTPResponse(resp *http.Response) *pluginv1.WatchSyncFault {
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:

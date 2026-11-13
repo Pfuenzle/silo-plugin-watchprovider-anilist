@@ -54,6 +54,7 @@ func findMedia(ctx context.Context, client *apiClient, target scrobbleTarget) (a
 					return candidate, nil
 				}
 			}
+			continue
 		}
 		return media[0], nil
 	}

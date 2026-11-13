@@ -137,13 +137,19 @@ func episodeOffset(media []aniListMedia, start, index int) int32 {
 }
 
 func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia, _ int32) int32 {
+	tv := make([]aniListMedia, 0, len(media))
+	for _, candidate := range media {
+		if candidate.Format == "TV" {
+			tv = append(tv, candidate)
+		}
+	}
 	start := int(seasonNumber - 1)
 	if start < 0 {
 		start = 0
 	}
-	for i := start; i < len(media); i++ {
-		if media[i].ID == selected.ID {
-			progress := episodeNumber - episodeOffset(media, start, i)
+	for i := start; i < len(tv); i++ {
+		if tv[i].ID == selected.ID {
+			progress := episodeNumber - episodeOffset(tv, start, i)
 			if progress < 0 {
 				return 0
 			}

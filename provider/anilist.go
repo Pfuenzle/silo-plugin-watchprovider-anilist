@@ -136,16 +136,8 @@ func episodeOffset(media []aniListMedia, start, index int) int32 {
 	return offset
 }
 
-func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia, seriesYear int32) int32 {
+func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia, _ int32) int32 {
 	start := int(seasonNumber - 1)
-	if seriesYear > 0 {
-		for i, candidate := range media {
-			if candidate.Format == "TV" && candidate.SeasonYear == seriesYear {
-				start = i
-				break
-			}
-		}
-	}
 	if start < 0 {
 		start = 0
 	}

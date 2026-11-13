@@ -213,11 +213,9 @@ func targetFromEvent(event *pluginv1.WatchSyncEvent) (scrobbleTarget, *pluginv1.
 		target.Search = firstNonEmpty(media.GetSeriesTitle(), media.GetTitle(), media.GetOriginalTitle())
 		target.Formats = []string{"TV", "TV_SHORT", "ONA", "OVA", "SPECIAL"}
 		target.SeasonNumber = media.GetSeasonNumber()
+		target.SeriesYear = media.GetSeriesYear()
 		target.Progress = media.GetEpisodeNumber()
 		target.SeriesTVDBID = media.GetSeriesExternalIds()["tvdb"]
-		if target.Progress <= 0 {
-			return scrobbleTarget{}, invalidRequestFault("Episode events require an episode number")
-		}
 		// AniList stores each season as its own media entry. Its progress is
 		// season-local, so never send Silo's series-wide absolute episode number.
 		target.Year = 0

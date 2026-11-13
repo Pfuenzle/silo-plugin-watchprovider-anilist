@@ -60,6 +60,7 @@ type fuzzyDate struct {
 type scrobbleTarget struct {
 	Search       string
 	Year         int32
+	SeriesYear   int32
 	Formats      []string
 	Progress     int32
 	SeasonNumber int32

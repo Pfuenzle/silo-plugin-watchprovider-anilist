@@ -41,11 +41,11 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 	if len(target.Formats) == 1 && target.Formats[0] == "MOVIE" {
 		selected = firstMedia(response.Data.Page.Media)
 	} else {
-		selected = selectSeason(response.Data.Page.Media, season, target.Progress)
+		selected = selectSeason(response.Data.Page.Media, season, target.Progress, target.SeriesYear)
 	}
 	if selected.ID != 0 {
 		if !(len(target.Formats) == 1 && target.Formats[0] == "MOVIE") {
-			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, target.SeriesYear)
 		}
 		return selected, nil
 	}
@@ -54,9 +54,9 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 		if fault := client.graphQL(ctx, mediaFallbackQuery, map[string]any{"search": search}, &response); fault != nil {
 			return aniListMedia{}, fault
 		}
-		selected = selectSeason(response.Data.Page.Media, season, target.Progress)
+		selected = selectSeason(response.Data.Page.Media, season, target.Progress, target.SeriesYear)
 		if selected.ID != 0 {
-			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, target.SeriesYear)
 			return selected, nil
 		}
 	}
@@ -104,7 +104,7 @@ func firstMedia(media []aniListMedia) aniListMedia {
 	}
 	return media[0]
 }
-func selectSeason(media []aniListMedia, seasonNumber, episodeNumber int32) aniListMedia {
+func selectSeason(media []aniListMedia, seasonNumber, episodeNumber, seriesYear int32) aniListMedia {
 	if len(media) == 0 {
 		return aniListMedia{}
 	}
@@ -118,14 +118,16 @@ func selectSeason(media []aniListMedia, seasonNumber, episodeNumber int32) aniLi
 		return aniListMedia{}
 	}
 	start := int(seasonNumber - 1)
-	if start < 0 {
-		start = 0
+	if seriesYear > 0 {
+		for i, candidate := range tv {
+			if candidate.SeasonYear == seriesYear {
+				start = i
+				break
+			}
+		}
 	}
-	if start >= len(tv) {
+	if start < 0 || start >= len(tv) {
 		return aniListMedia{}
-	}
-	if episodeNumber <= 0 {
-		return tv[start]
 	}
 	for i := start; i < len(tv); i++ {
 		if tv[i].Episodes <= 0 || episodeNumber <= episodeOffset(tv, start, i)+tv[i].Episodes {
@@ -145,8 +147,16 @@ func episodeOffset(media []aniListMedia, start, index int) int32 {
 	return offset
 }
 
-func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia) int32 {
+func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia, seriesYear int32) int32 {
 	start := int(seasonNumber - 1)
+	if seriesYear > 0 {
+		for i, candidate := range media {
+			if candidate.Format == "TV" && candidate.SeasonYear == seriesYear {
+				start = i
+				break
+			}
+		}
+	}
 	if start < 0 {
 		start = 0
 	}

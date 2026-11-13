@@ -168,6 +168,61 @@ func TestSeasonUsesSeasonLocalProgress(t *testing.T) {
 	}
 }
 
+func TestSplitCourUsesSeasonLocalEpisode(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeGraphQL(t, r)
+		if strings.Contains(payload.Query, "SaveMediaListEntry") {
+			if payload.Variables["mediaId"] != float64(162670) || payload.Variables["progress"] != float64(3) || payload.Variables["status"] != "CURRENT" {
+				t.Fatalf("mutation variables = %#v", payload.Variables)
+			}
+			writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 1, "status": "CURRENT", "progress": 3}}})
+			return
+		}
+		writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{
+			map[string]any{"id": 105333, "episodes": 24, "format": "TV", "seasonYear": 2019},
+			map[string]any{"id": 113936, "episodes": 11, "format": "TV", "seasonYear": 2021},
+			map[string]any{"id": 131518, "episodes": 11, "format": "TV", "seasonYear": 2023},
+			map[string]any{"id": 162670, "episodes": 11, "format": "TV", "seasonYear": 2023},
+		}}}})
+	}))
+	defer upstream.Close()
+	response, err := NewServer(upstream.Client()).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
+		Context: authenticatedContext(upstream.URL),
+		Events: []*pluginv1.WatchSyncEvent{{EventId: "split-cour", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+			Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE, SeriesTitle: "Example", SeasonNumber: 3, EpisodeNumber: 14}}},
+	})
+	if err != nil || response.GetFault() != nil || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED {
+		t.Fatalf("response = %v, error = %v", response, err)
+	}
+}
+
+func TestSplitCourEpisodeFifteenUsesPartTwo(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeGraphQL(t, r)
+		if strings.Contains(payload.Query, "SaveMediaListEntry") {
+			if payload.Variables["mediaId"] != float64(162670) || payload.Variables["progress"] != float64(4) || payload.Variables["status"] != "CURRENT" {
+				t.Fatalf("mutation variables = %#v", payload.Variables)
+			}
+			writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 1, "status": "CURRENT", "progress": 4}}})
+			return
+		}
+		writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{
+			map[string]any{"id": 105333, "episodes": 24, "format": "TV", "seasonYear": 2019},
+			map[string]any{"id": 113936, "episodes": 11, "format": "TV", "seasonYear": 2021},
+			map[string]any{"id": 131518, "episodes": 11, "format": "TV", "seasonYear": 2023},
+			map[string]any{"id": 162670, "episodes": 11, "format": "TV", "seasonYear": 2023},
+		}}}})
+	}))
+	defer upstream.Close()
+	response, err := NewServer(upstream.Client()).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
+		Context: authenticatedContext(upstream.URL),
+		Events: []*pluginv1.WatchSyncEvent{{EventId: "split-cour-15", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+			Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE, SeriesTitle: "Example", SeriesYear: 2023, SeasonNumber: 3, EpisodeNumber: 15}}},
+	})
+	if err != nil || response.GetFault() != nil || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED {
+		t.Fatalf("response = %v, error = %v", response, err)
+	}
+}
 func TestApplyWatchedEpisodeIsNoChangeWhenProgressAlreadyCoversEpisode(t *testing.T) {
 	t.Parallel()
 	mutations := 0

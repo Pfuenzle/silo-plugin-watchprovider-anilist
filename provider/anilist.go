@@ -46,16 +46,19 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 		}
 		return selected, nil
 	}
-	if fault := client.graphQL(ctx, mediaFallbackQuery, map[string]any{"search": normalizeAnimeTitle(target.Search)}, &response); fault != nil {
-		return aniListMedia{}, fault
+	for _, search := range []string{target.Search, normalizeAnimeTitle(target.Search)} {
+		response = graphQLResponse{}
+		if fault := client.graphQL(ctx, mediaFallbackQuery, map[string]any{"search": search}, &response); fault != nil {
+			return aniListMedia{}, fault
+		}
+		selected = selectSeason(response.Data.Page.Media, season, target.Progress)
+		if selected.ID != 0 {
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
+			return selected, nil
+		}
 	}
-	selected = selectSeason(response.Data.Page.Media, season, target.Progress)
-	if selected.ID != 0 {
-		target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
-	}
-	return selected, nil
+	return aniListMedia{}, nil
 }
-
 func lookupXEM(ctx context.Context, httpClient *http.Client, endpointURL, tvdbID string, season, episode int32) (xemMapping, bool) {
 	endpoint, err := url.Parse(endpointURL)
 	if err != nil {

@@ -32,11 +32,17 @@ type aniListPage struct {
 
 type aniListMedia struct {
 	ID             int               `json:"id"`
+	Title          aniListTitle      `json:"title"`
 	Episodes       int32             `json:"episodes"`
 	Format         string            `json:"format"`
 	Season         string            `json:"season"`
 	SeasonYear     int32             `json:"seasonYear"`
 	MediaListEntry *aniListListEntry `json:"mediaListEntry"`
+}
+type aniListTitle struct {
+	Romaji  string `json:"romaji"`
+	English string `json:"english"`
+	Native  string `json:"native"`
 }
 
 type aniListListEntry struct {

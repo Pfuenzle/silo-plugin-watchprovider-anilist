@@ -22,43 +22,40 @@ func validateAccount(ctx context.Context, client *apiClient) (*pluginv1.WatchSyn
 }
 
 func findMedia(ctx context.Context, client *apiClient, target scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
-	queries := []struct {
-		search  string
-		formats []string
-		year    string
-	}{
-		{target.Search, target.Formats, yearLike(target.Year)},
-		{normalizeAnimeTitle(target.Search), nil, ""},
+	var response graphQLResponse
+	variables := map[string]any{"search": target.Search, "formats": target.Formats, "year": yearLike(target.Year)}
+	if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
+		return aniListMedia{}, fault
 	}
-	for _, query := range queries {
-		variables := map[string]any{"search": query.search, "formats": query.formats, "year": nil}
-		if query.year != "" {
-			variables["year"] = query.year
-		}
-		var response graphQLResponse
-		if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
-			return aniListMedia{}, fault
-		}
-		media := response.Data.Page.Media
-		if len(media) == 0 {
+	selected := selectSeason(response.Data.Page.Media, target.SeasonNumber)
+	if selected.ID != 0 {
+		return selected, nil
+	}
+	response = graphQLResponse{}
+	if fault := client.graphQL(ctx, mediaFallbackQuery, map[string]any{"search": normalizeAnimeTitle(target.Search)}, &response); fault != nil {
+		return aniListMedia{}, fault
+	}
+	return selectSeason(response.Data.Page.Media, target.SeasonNumber), nil
+}
+
+func selectSeason(media []aniListMedia, seasonNumber int32) aniListMedia {
+	if len(media) == 0 {
+		return aniListMedia{}
+	}
+	if seasonNumber <= 0 {
+		return media[0]
+	}
+	season := int32(0)
+	for _, candidate := range media {
+		if candidate.Format != "TV" {
 			continue
 		}
-		if target.SeasonNumber > 0 {
-			season := int32(0)
-			for _, candidate := range media {
-				if candidate.Format != "TV" {
-					continue
-				}
-				season++
-				if season == target.SeasonNumber {
-					return candidate, nil
-				}
-			}
-			continue
+		season++
+		if season == seasonNumber {
+			return candidate
 		}
-		return media[0], nil
 	}
-	return aniListMedia{}, nil
+	return aniListMedia{}
 }
 
 func yearLike(year int32) string {

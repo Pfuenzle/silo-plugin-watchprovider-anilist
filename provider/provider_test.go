@@ -103,7 +103,7 @@ func TestApplyWatchedEpisodeUpdatesSeriesProgress(t *testing.T) {
 			return
 		}
 		formats := payload.Variables["formats"].([]any)
-		if payload.Variables["search"] != "Cowboy Bebop" || len(formats) != 5 || formats[0] != "TV" || payload.Variables["year"] != nil {
+		if payload.Variables["search"] != "Cowboy Bebop" || len(formats) != 5 || formats[0] != "TV" || payload.Variables["year"] != "" {
 			t.Fatalf("variables = %#v", payload.Variables)
 		}
 		writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{map[string]any{

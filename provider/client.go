@@ -124,7 +124,7 @@ func (c *apiClient) graphQL(ctx context.Context, query string, variables map[str
 		if resp.StatusCode == http.StatusTooManyRequests {
 			c.gate.backoff(retryAfter(resp.Header.Get("Retry-After")))
 		}
-		return faultForHTTPResponse(resp)
+		return faultForHTTPResponseBody(resp)
 	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes))
 	if err := decoder.Decode(output); err != nil {
@@ -137,11 +137,22 @@ func (c *apiClient) graphQL(ctx context.Context, query string, variables map[str
 }
 
 func faultForHTTPResponseBody(resp *http.Response) *pluginv1.WatchSyncFault {
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return faultForHTTPResponse(resp)
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	var payload graphQLResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&payload); err == nil && len(payload.Errors) > 0 {
+	if json.Unmarshal(body, &payload) == nil && len(payload.Errors) > 0 {
 		return faultForGraphQLErrors(payload.Errors)
 	}
-	return faultForHTTPResponse(resp)
+	message := strings.Join(strings.Fields(string(body)), " ")
+	if len(message) > 180 {
+		message = message[:180]
+	}
+	if message == "" {
+		return faultForHTTPResponse(resp)
+	}
+	return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: fmt.Sprintf("AniList rejected the request (HTTP %d): %s", resp.StatusCode, message)}
 }
 
 func faultForHTTPResponse(resp *http.Response) *pluginv1.WatchSyncFault {

@@ -1,12 +1,21 @@
 {
   "plugin_id": "silo.watchprovider.anilist",
-  "version": "0.2.5",
+  "version": "0.2.8",
   "checksum": "__CHECKSUM__",
   "silo_api_version": "v1",
   "supported_platforms": [
-    { "os": "darwin", "arch": "arm64" },
-    { "os": "linux", "arch": "amd64" },
-    { "os": "linux", "arch": "arm64" }
+    {
+      "os": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "os": "linux",
+      "arch": "amd64"
+    },
+    {
+      "os": "linux",
+      "arch": "arm64"
+    }
   ],
   "capabilities": [
     {
@@ -16,7 +25,9 @@
       "description": "Exports completed Silo movie and episode watches to AniList anime lists immediately after completion.",
       "config_schema": [],
       "watch_sync_provider": {
-        "auth_methods": ["WATCH_SYNC_AUTH_METHOD_AUTHORIZATION_CODE"],
+        "auth_methods": [
+          "WATCH_SYNC_AUTH_METHOD_AUTHORIZATION_CODE"
+        ],
         "export_watched": true,
         "import_watched": false,
         "import_progress": false,

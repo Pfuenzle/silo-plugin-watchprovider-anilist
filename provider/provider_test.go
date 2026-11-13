@@ -52,12 +52,8 @@ func TestApplyWatchedMovieCompletesAniListEntry(t *testing.T) {
 		payload := decodeGraphQL(t, r)
 		if strings.Contains(payload.Query, "SaveMediaListEntry") {
 			mutations++
-			if payload.Variables["mediaId"] != float64(15125) || payload.Variables["status"] != "COMPLETED" {
+			if payload.Variables["mediaId"] != float64(15125) || payload.Variables["status"] != "COMPLETED" || payload.Variables["progress"] != float64(1) {
 				t.Fatalf("variables = %#v", payload.Variables)
-			}
-			completedAt := payload.Variables["completedAt"].(map[string]any)
-			if completedAt["year"] != float64(2026) || completedAt["month"] != float64(8) || completedAt["day"] != float64(5) {
-				t.Fatalf("completedAt = %#v", completedAt)
 			}
 			writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 7, "status": "COMPLETED", "progress": 1}}})
 			return

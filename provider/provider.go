@@ -55,8 +55,8 @@ const mediaFallbackQuery = `query ($search: String!) {
   }
 }`
 
-const saveMediaListEntryMutation = `mutation ($mediaId: Int!, $status: MediaListStatus!, $progress: Int, $completedAt: FuzzyDateInput) {
-  SaveMediaListEntry(mediaId: $mediaId, status: $status, progress: $progress, completedAt: $completedAt) {
+const saveMediaListEntryMutation = `mutation ($mediaId: Int!, $status: MediaListStatus!, $progress: Int!) {
+  SaveMediaListEntry(mediaId: $mediaId, status: $status, progress: $progress) {
     id
     status
     progress

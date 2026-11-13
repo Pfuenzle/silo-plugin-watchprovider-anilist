@@ -161,7 +161,7 @@ func normalizeAnimeTitle(title string) string {
 }
 
 func saveMediaListEntry(ctx context.Context, client *apiClient, mediaID int, status string, target *scrobbleTarget) *pluginv1.WatchSyncFault {
-	variables := map[string]any{"mediaId": mediaID, "status": status, "progress": target.Progress, "completedAt": target.CompletedAt}
+	variables := map[string]any{"mediaId": mediaID, "status": status, "progress": target.Progress}
 	var response graphQLResponse
 	return client.graphQL(ctx, saveMediaListEntryMutation, variables, &response)
 }

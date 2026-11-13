@@ -30,6 +30,21 @@ const mediaSearchQuery = `query ($search: String!, $formats: [MediaFormat], $yea
   Page(page: 1, perPage: 20) {
     media(type: ANIME, search: $search, format_in: $formats, startDate_like: $year, sort: [START_DATE]) {
       id
+      title { romaji english native }
+      episodes
+      format
+      season
+      seasonYear
+      mediaListEntry { id status progress }
+    }
+  }
+}`
+
+const mediaFallbackQuery = `query ($search: String!) {
+  Page(page: 1, perPage: 20) {
+    media(type: ANIME, search: $search, sort: [START_DATE]) {
+      id
+      title { romaji english native }
       episodes
       format
       season

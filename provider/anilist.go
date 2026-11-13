@@ -115,14 +115,6 @@ func selectSeason(media []aniListMedia, seasonNumber, episodeNumber, seriesYear 
 		return aniListMedia{}
 	}
 	start := int(seasonNumber - 1)
-	if seriesYear > 0 {
-		for i, candidate := range tv {
-			if candidate.SeasonYear == seriesYear {
-				start = i
-				break
-			}
-		}
-	}
 	if start < 0 || start >= len(tv) {
 		return aniListMedia{}
 	}

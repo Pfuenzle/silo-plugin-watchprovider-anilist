@@ -17,8 +17,9 @@ type graphQLData struct {
 }
 
 type graphQLError struct {
-	Message string `json:"message"`
-	Status  int    `json:"status"`
+	Message    string              `json:"message"`
+	Status     int                 `json:"status"`
+	Validation map[string][]string `json:"validation"`
 }
 
 type aniListViewer struct {

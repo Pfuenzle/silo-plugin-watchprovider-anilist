@@ -184,13 +184,19 @@ func faultForGraphQLErrors(values []graphQLError) *pluginv1.WatchSyncFault {
 		if value.Status >= http.StatusInternalServerError {
 			return temporaryFault("AniList is temporarily unavailable", 0)
 		}
+		if len(value.Validation) > 0 {
+			parts := make([]string, 0, len(value.Validation))
+			for field, messages := range value.Validation {
+				parts = append(parts, field+": "+strings.Join(messages, ", "))
+			}
+			return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: "AniList validation: " + strings.Join(parts, "; ")}
+		}
 		if message := strings.Join(strings.Fields(value.Message), " "); message != "" {
 			return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: "AniList rejected the GraphQL request: " + message}
 		}
 	}
 	return &pluginv1.WatchSyncFault{Code: pluginv1.WatchSyncFaultCode_WATCH_SYNC_FAULT_CODE_INVALID_REQUEST, SafeMessage: "AniList rejected the GraphQL request"}
 }
-
 func retryAfter(value string) time.Duration {
 	if seconds, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && seconds > 0 {
 		return time.Duration(seconds) * time.Second

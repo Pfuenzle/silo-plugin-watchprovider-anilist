@@ -42,7 +42,7 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 	}
 	if selected.ID != 0 {
 		if !(len(target.Formats) == 1 && target.Formats[0] == "MOVIE") {
-			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, target.SeriesYear)
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, 0)
 		}
 		return selected, nil
 	}
@@ -53,8 +53,7 @@ func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (
 		}
 		selected = selectSeason(response.Data.Page.Media, season, target.Progress, target.SeriesYear)
 		if selected.ID != 0 {
-			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, target.SeriesYear)
-			return selected, nil
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected, 0)
 		}
 	}
 	return aniListMedia{}, nil

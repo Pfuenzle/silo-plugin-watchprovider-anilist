@@ -2,7 +2,11 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
@@ -20,42 +24,138 @@ func validateAccount(ctx context.Context, client *apiClient) (*pluginv1.WatchSyn
 	}
 	return &pluginv1.WatchSyncAccount{ExternalSubject: fmt.Sprint(viewer.ID), Username: viewer.Name, DisplayName: viewer.Name}, nil
 }
-
-func findMedia(ctx context.Context, client *apiClient, target scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
+func findMedia(ctx context.Context, client *apiClient, target *scrobbleTarget) (aniListMedia, *pluginv1.WatchSyncFault) {
+	if target.SeriesTVDBID != "" {
+		if mapping, ok := lookupXEM(ctx, client.http, defaultXEMEndpoint, target.SeriesTVDBID, target.SeasonNumber, target.Progress); ok {
+			target.XEMSeason = mapping.Season
+			target.Progress = mapping.Episode
+		}
+	}
 	var response graphQLResponse
 	variables := map[string]any{"search": target.Search, "formats": target.Formats, "year": yearLike(target.Year)}
 	if fault := client.graphQL(ctx, mediaSearchQuery, variables, &response); fault != nil {
 		return aniListMedia{}, fault
 	}
-	selected := selectSeason(response.Data.Page.Media, target.SeasonNumber)
+	season := target.XEMSeason
+	if season == 0 {
+		season = target.SeasonNumber
+	}
+	var selected aniListMedia
+	if len(target.Formats) == 1 && target.Formats[0] == "MOVIE" {
+		selected = firstMedia(response.Data.Page.Media)
+	} else {
+		selected = selectSeason(response.Data.Page.Media, season, target.Progress)
+	}
 	if selected.ID != 0 {
+		if !(len(target.Formats) == 1 && target.Formats[0] == "MOVIE") {
+			target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
+		}
 		return selected, nil
 	}
-	response = graphQLResponse{}
 	if fault := client.graphQL(ctx, mediaFallbackQuery, map[string]any{"search": normalizeAnimeTitle(target.Search)}, &response); fault != nil {
 		return aniListMedia{}, fault
 	}
-	return selectSeason(response.Data.Page.Media, target.SeasonNumber), nil
+	selected = selectSeason(response.Data.Page.Media, season, target.Progress)
+	if selected.ID != 0 {
+		target.Progress = selectedProgress(response.Data.Page.Media, season, target.Progress, selected)
+	}
+	return selected, nil
 }
 
-func selectSeason(media []aniListMedia, seasonNumber int32) aniListMedia {
+func lookupXEM(ctx context.Context, httpClient *http.Client, endpointURL, tvdbID string, season, episode int32) (xemMapping, bool) {
+	endpoint, err := url.Parse(endpointURL)
+	if err != nil {
+		return xemMapping{}, false
+	}
+	query := endpoint.Query()
+	query.Set("id", tvdbID)
+	query.Set("origin", "tvdb")
+	query.Set("season", strconv.FormatInt(int64(season), 10))
+	query.Set("episode", strconv.FormatInt(int64(episode), 10))
+	query.Set("destination", "anidb")
+	endpoint.RawQuery = query.Encode()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return xemMapping{}, false
+	}
+	request.Header.Set("User-Agent", "Silo-AniList/0.3")
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return xemMapping{}, false
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return xemMapping{}, false
+	}
+	var payload xemMappingResponse
+	if json.NewDecoder(response.Body).Decode(&payload) != nil || payload.Result != "success" {
+		return xemMapping{}, false
+	}
+	mapping, ok := payload.Data["anidb"]
+	return mapping, ok
+}
+
+func firstMedia(media []aniListMedia) aniListMedia {
 	if len(media) == 0 {
 		return aniListMedia{}
 	}
-	if seasonNumber <= 0 {
-		return media[0]
+	return media[0]
+}
+func selectSeason(media []aniListMedia, seasonNumber, episodeNumber int32) aniListMedia {
+	if len(media) == 0 {
+		return aniListMedia{}
 	}
-	season := int32(0)
+	tv := make([]aniListMedia, 0, len(media))
 	for _, candidate := range media {
-		if candidate.Format != "TV" {
-			continue
+		if candidate.Format == "TV" {
+			tv = append(tv, candidate)
 		}
-		season++
-		if season == seasonNumber {
-			return candidate
+	}
+	if len(tv) == 0 {
+		return aniListMedia{}
+	}
+	start := int(seasonNumber - 1)
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(tv) {
+		return aniListMedia{}
+	}
+	if episodeNumber <= 0 {
+		return tv[start]
+	}
+	for i := start; i < len(tv); i++ {
+		if tv[i].Episodes <= 0 || episodeNumber <= episodeOffset(tv, start, i)+tv[i].Episodes {
+			return tv[i]
 		}
 	}
 	return aniListMedia{}
+}
+
+func episodeOffset(media []aniListMedia, start, index int) int32 {
+	var offset int32
+	for i := start; i < index; i++ {
+		if media[i].Episodes > 0 {
+			offset += int32(media[i].Episodes)
+		}
+	}
+	return offset
+}
+
+func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia) int32 {
+	start := int(seasonNumber - 1)
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < len(media); i++ {
+		if media[i].ID == selected.ID {
+			return episodeNumber - episodeOffset(media, start, i)
+		}
+	}
+	return episodeNumber
 }
 
 func yearLike(year int32) string {
@@ -69,14 +169,14 @@ func normalizeAnimeTitle(title string) string {
 	return strings.NewReplacer(".", " ", ":", " ", "-", " ").Replace(title)
 }
 
-func saveMediaListEntry(ctx context.Context, client *apiClient, mediaID int, status string, target scrobbleTarget) *pluginv1.WatchSyncFault {
+func saveMediaListEntry(ctx context.Context, client *apiClient, mediaID int, status string, target *scrobbleTarget) *pluginv1.WatchSyncFault {
 	variables := map[string]any{"mediaId": mediaID, "status": status, "progress": target.Progress, "completedAt": target.CompletedAt}
 	var response graphQLResponse
 	return client.graphQL(ctx, saveMediaListEntryMutation, variables, &response)
 }
 
-func desiredStatus(target scrobbleTarget, media aniListMedia) string {
-	if target.Final || (media.Episodes > 0 && target.Progress >= media.Episodes) {
+func desiredStatus(target *scrobbleTarget, media aniListMedia) string {
+	if target.Final || (media.Episodes > 0 && target.Progress >= int32(media.Episodes)) {
 		return "COMPLETED"
 	}
 	return "CURRENT"

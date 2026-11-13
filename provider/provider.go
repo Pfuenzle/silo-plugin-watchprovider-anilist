@@ -17,6 +17,7 @@ const (
 	configClientSecret     = "anilist.client_secret"
 	configGraphQLEndpoint  = "anilist.graphql_url"
 	defaultGraphQLEndpoint = "https://graphql.anilist.co"
+	defaultXEMEndpoint     = "https://thexem.info/map/single"
 )
 
 var (
@@ -65,12 +66,16 @@ const saveMediaListEntryMutation = `mutation ($mediaId: Int!, $status: MediaList
 type Server struct {
 	pluginv1.UnimplementedWatchSyncProviderServer
 	http          *http.Client
+	xem           *http.Client
 	tokenEndpoint string
 	gate          *requestGate
 }
 
 func NewServer(httpClient *http.Client) *Server {
-	return &Server{http: httpClient, gate: &requestGate{}}
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: defaultRequestTimeout}
+	}
+	return &Server{http: httpClient, xem: httpClient, gate: &requestGate{}}
 }
 
 func (s *Server) ExchangeAPIKey(ctx context.Context, req *pluginv1.WatchSyncExchangeAPIKeyRequest) (*pluginv1.WatchSyncCredentialResponse, error) {
@@ -165,7 +170,7 @@ func (s *Server) applyEvent(ctx context.Context, client *apiClient, event *plugi
 	if fault != nil {
 		return resultFromFault(event.GetEventId(), fault), nil
 	}
-	media, requestFault := findMedia(ctx, client, target)
+	media, requestFault := findMedia(ctx, client, &target)
 	if requestFault != nil {
 		if connectionWide(requestFault) {
 			return nil, requestFault
@@ -173,13 +178,13 @@ func (s *Server) applyEvent(ctx context.Context, client *apiClient, event *plugi
 		return resultFromFault(event.GetEventId(), requestFault), nil
 	}
 	if media.ID == 0 {
-		return resultFromFault(event.GetEventId(), invalidRequestFault(fmt.Sprintf("AniList media could not be matched for %q season %d year %d", target.Search, target.SeasonNumber, target.Year))), nil
+		return resultFromFault(event.GetEventId(), invalidRequestFault(fmt.Sprintf("AniList media could not be matched for %q season %d episode %d", target.Search, target.SeasonNumber, target.Progress))), nil
 	}
-	status := desiredStatus(target, media)
+	status := desiredStatus(&target, media)
 	if alreadyApplied(media.MediaListEntry, status, target.Progress) {
 		return &pluginv1.WatchSyncApplyResult{EventId: event.GetEventId(), Status: pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_NO_CHANGE}, nil
 	}
-	if requestFault := saveMediaListEntry(ctx, client, media.ID, status, target); requestFault != nil {
+	if requestFault := saveMediaListEntry(ctx, client, media.ID, status, &target); requestFault != nil {
 		if connectionWide(requestFault) {
 			return nil, requestFault
 		}
@@ -209,6 +214,7 @@ func targetFromEvent(event *pluginv1.WatchSyncEvent) (scrobbleTarget, *pluginv1.
 		target.Formats = []string{"TV", "TV_SHORT", "ONA", "OVA", "SPECIAL"}
 		target.SeasonNumber = media.GetSeasonNumber()
 		target.Progress = media.GetEpisodeNumber()
+		target.SeriesTVDBID = media.GetSeriesExternalIds()["tvdb"]
 		if target.Progress <= 0 {
 			return scrobbleTarget{}, invalidRequestFault("Episode events require an episode number")
 		}

@@ -63,6 +63,18 @@ type scrobbleTarget struct {
 	Formats      []string
 	Progress     int32
 	SeasonNumber int32
+	XEMSeason    int32
+	SeriesTVDBID string
 	CompletedAt  *fuzzyDate
 	Final        bool
+}
+type xemMapping struct {
+	Season   int32 `json:"season"`
+	Episode  int32 `json:"episode"`
+	Absolute int32 `json:"absolute"`
+}
+
+type xemMappingResponse struct {
+	Result string                `json:"result"`
+	Data   map[string]xemMapping `json:"data"`
 }

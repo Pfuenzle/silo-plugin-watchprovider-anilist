@@ -132,6 +132,12 @@ func hasParentRelation(media aniListMedia) bool {
 			return true
 		}
 	}
+	title := strings.ToLower(media.Title.Romaji + " " + media.Title.English)
+	for _, marker := range []string{"junior high", "ova", "special", "movie", "picture drama", "lost girls", "no regrets"} {
+		if strings.Contains(title, marker) {
+			return true
+		}
+	}
 	return false
 }
 func episodeOffset(media []aniListMedia, start, index int) int32 {

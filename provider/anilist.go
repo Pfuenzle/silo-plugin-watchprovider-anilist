@@ -107,9 +107,10 @@ func selectSeason(media []aniListMedia, seasonNumber, episodeNumber, seriesYear 
 	}
 	tv := make([]aniListMedia, 0, len(media))
 	for _, candidate := range media {
-		if candidate.Format == "TV" {
-			tv = append(tv, candidate)
+		if candidate.Format != "TV" || hasParentRelation(candidate) {
+			continue
 		}
+		tv = append(tv, candidate)
 	}
 	if len(tv) == 0 {
 		return aniListMedia{}
@@ -125,7 +126,14 @@ func selectSeason(media []aniListMedia, seasonNumber, episodeNumber, seriesYear 
 	}
 	return aniListMedia{}
 }
-
+func hasParentRelation(media aniListMedia) bool {
+	for _, edge := range media.Relations.Edges {
+		if edge.RelationType == "PARENT" {
+			return true
+		}
+	}
+	return false
+}
 func episodeOffset(media []aniListMedia, start, index int) int32 {
 	var offset int32
 	for i := start; i < index; i++ {
@@ -139,7 +147,7 @@ func episodeOffset(media []aniListMedia, start, index int) int32 {
 func selectedProgress(media []aniListMedia, seasonNumber, episodeNumber int32, selected aniListMedia, _ int32) int32 {
 	tv := make([]aniListMedia, 0, len(media))
 	for _, candidate := range media {
-		if candidate.Format == "TV" {
+		if candidate.Format == "TV" && !hasParentRelation(candidate) {
 			tv = append(tv, candidate)
 		}
 	}

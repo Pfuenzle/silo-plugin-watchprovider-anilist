@@ -247,6 +247,33 @@ func TestGenericSplitCourDoesNotDependOnDrStone(t *testing.T) {
 		t.Fatalf("response = %v, error = %v", response, err)
 	}
 }
+
+func TestParentRelationSpinOffDoesNotBecomeSeason(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeGraphQL(t, r)
+		if strings.Contains(payload.Query, "SaveMediaListEntry") {
+			if payload.Variables["mediaId"] != float64(20958) || payload.Variables["progress"] != float64(1) {
+				t.Fatalf("mutation variables = %#v", payload.Variables)
+			}
+			writeJSON(t, w, map[string]any{"data": map[string]any{"SaveMediaListEntry": map[string]any{"id": 1, "status": "CURRENT", "progress": 1}}})
+			return
+		}
+		writeJSON(t, w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": []any{
+			map[string]any{"id": 16498, "episodes": 25, "format": "TV", "relations": map[string]any{"edges": []any{}}},
+			map[string]any{"id": 21281, "episodes": 12, "format": "TV", "relations": map[string]any{"edges": []any{map[string]any{"relationType": "PARENT", "node": map[string]any{"id": 16498}}}}},
+			map[string]any{"id": 20958, "episodes": 12, "format": "TV", "relations": map[string]any{"edges": []any{map[string]any{"relationType": "PREQUEL", "node": map[string]any{"id": 16498}}}}},
+		}}}})
+	}))
+	defer upstream.Close()
+	response, err := NewServer(upstream.Client()).ApplyEvents(t.Context(), &pluginv1.WatchSyncApplyEventsRequest{
+		Context: authenticatedContext(upstream.URL),
+		Events: []*pluginv1.WatchSyncEvent{{EventId: "aot-s02e01", Operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_MARK_WATCHED,
+			Media: &pluginv1.WatchSyncMedia{MediaType: pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE, SeriesTitle: "Attack on Titan", SeasonNumber: 2, EpisodeNumber: 1}}},
+	})
+	if err != nil || response.GetFault() != nil || response.GetResults()[0].GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED {
+		t.Fatalf("response = %v, error = %v", response, err)
+	}
+}
 func TestApplyWatchedEpisodeIsNoChangeWhenProgressAlreadyCoversEpisode(t *testing.T) {
 	t.Parallel()
 	mutations := 0

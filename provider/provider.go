@@ -37,6 +37,7 @@ const mediaSearchQuery = `query ($search: String!, $formats: [MediaFormat], $yea
       season
       seasonYear
       mediaListEntry { id status progress }
+      relations { edges { relationType node { id } } }
     }
   }
 }`
@@ -51,6 +52,7 @@ const mediaFallbackQuery = `query ($search: String!) {
       season
       seasonYear
       mediaListEntry { id status progress }
+      relations { edges { relationType node { id } } }
     }
   }
 }`

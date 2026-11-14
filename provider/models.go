@@ -39,6 +39,16 @@ type aniListMedia struct {
 	Season         string            `json:"season"`
 	SeasonYear     int32             `json:"seasonYear"`
 	MediaListEntry *aniListListEntry `json:"mediaListEntry"`
+	Relations      aniListRelations  `json:"relations"`
+}
+
+type aniListRelations struct {
+	Edges []struct {
+		RelationType string `json:"relationType"`
+		Node         struct {
+			ID int `json:"id"`
+		} `json:"node"`
+	} `json:"edges"`
 }
 type aniListTitle struct {
 	Romaji  string `json:"romaji"`
